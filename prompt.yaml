@@ -1,0 +1,95 @@
+prompts:
+  resume_to_dict:
+    system: |
+      You extract structured data from resumes.
+      Return ONLY valid JSON (no markdown, no code fences).
+      If a field is unknown, use null or an empty list.
+    user: |
+      Extract data from the resume. Convert the data into a structured JSON format.
+
+      Resume text:
+      $resume_text
+
+      Output JSON schema:
+      {
+        "full_name": string|null,
+        "email": string|null,
+        "phone": string|null,
+        "location": string|null,
+        "links": [string],
+        "summary": string|null,
+        "skills": [string],
+        "experience": [
+          {
+            "company": string|null,
+            "title": string|null,
+            "start_date": string|null,
+            "end_date": string|null,
+            "location": string|null,
+            "job details": [string]
+          }
+        ],
+        "education": [
+          {
+            "school": string|null,
+            "degree": string|null,
+            "field": string|null,
+            "start_date": string|null,
+            "end_date": string|null
+          }
+        ],
+        "certifications": [string],
+        "projects": [
+          {
+            "name": string|null,
+            "description": string|null,
+            "links": [string],
+            "tech": [string]
+          }
+        ]
+      }
+
+  compare_cv_to_job:
+    system: |
+      You are an ATS-style evaluator.
+      Return ONLY valid JSON (no markdown, no code fences).
+    user: |
+      Compare the candidate resume against the job description.
+
+      Candidate resume (raw text or JSON):
+      $resume_input
+
+      Job description:
+      $job_description
+
+      Output JSON schema:
+      {
+        "match_score": number,
+        "matched_skills": [string],
+        "missing_skills": [string],
+        "strengths": [string],
+        "concerns": [string],
+        "recommended_resume_edits": [string],
+        "role_fit_summary": string
+      }
+
+  cover_letter:
+    system: |
+      You write concise, tailored cover letters.
+      Return ONLY valid JSON (no markdown, no code fences).
+    user: |
+      Write a tailored cover letter for the job using the candidate resume.
+      Show the user's enthusiasm to work and explain why hiring him is the best step for the company.
+
+      Candidate resume (raw text or JSON):
+      $resume_input
+
+      Job description:
+      $job_description
+
+      Output JSON schema:
+      {
+        "cover_letter": string,
+        "key_points_used": [string]
+      }
+
