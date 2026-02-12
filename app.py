@@ -1,35 +1,49 @@
-from typing import Dict
-from fastapi import FastAPI, File, Form, UploadFile
-from pydantic import BaseModel
+from typing import Optional
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 import uvicorn
 
-from agent import call_agent, call_manager
-from helper import extract_pdf_text
+from agent import call_agent
+from helper import extract_pdf_text, reset_token_usage, print_token_usage
 app = FastAPI()
 
-class ApplicationInformation(BaseModel):
-    name: str
+# In-memory cache for the last uploaded CV text.
+_CACHED_CV_TEXT: Optional[str] = None
     
 
 @app.get("/health")
 def read_root():
+    print("api: health check")
     return {"we are healthy"}
 
 @app.post("/upload/")
-def upload_and_submit(jd: str = Form(...), file: UploadFile = File(...)):
-    # file_bytes = file.file.read()
-    # UploadFile returns bytes, decode to text before passing to the agent.
-    file_text = extract_pdf_text(file.file)
+def upload_and_submit(
+    jd: str = Form(...),
+    file: Optional[UploadFile] = File(None),
+):
+    global _CACHED_CV_TEXT
+    print("api: /upload start")
+    reset_token_usage()
+    if file is not None:
+        print("api: extracting CV text")
+        # UploadFile returns bytes, decode to text before passing to the agent.
+        _CACHED_CV_TEXT = extract_pdf_text(file.file)
+        print("api: CV text cached")
+
+    if not _CACHED_CV_TEXT:
+        print("api: error - no CV cached")
+        raise HTTPException(status_code=400, detail="No CV uploaded yet.")
 
     print('calling the agent.')
-    call_agent("mistralai/mistral-small-latest", file_text, jd)
-    # result: Dict = call_manager(file_text, jd)
+    result_text = call_agent(_CACHED_CV_TEXT, jd)
     print('agent calling is finished.')
-    return {"CV": result['cv'], "Cover Letter": result['cover_letter'], "Gap Analysis": result['gap_analysis']}
+    print_token_usage()
+    print("api: /upload complete")
+    return result_text
 
 @app.get("/")
 def index():
 
+    print("api: index")
     return {"Hello": "World"}
 
 if __name__ == "__main__":

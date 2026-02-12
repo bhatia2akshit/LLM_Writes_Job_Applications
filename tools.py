@@ -1,178 +1,157 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 from langchain_core.tools import tool
-from helper import init_huggingface_llm, parse_jsonish
+from helper import add_token_usage
+from llm_service import LLMService
 from prompt_service import PromptService
 from dotenv import load_dotenv
 
 load_dotenv('.env.local')
-
+llm = LLMService("huggingface").get_llm()
 
 
 @tool
-def extract_cv_information(content: str) -> Dict[str, Any]:
+def extract_cv_information(content: str) -> str:
     """
-    Extract structured information from CV text with dynamic schema.
-    
-    This tool analyzes the CV text and:
-    1. Determines what information is present in the CV
-    2. Creates an appropriate schema for that information
-    3. Extracts the data into a structured dictionary
-    
+    Convert raw text of a CV into the structured dictionary.
+
     Args:
         content: The raw text extracted from a CV/resume
         
     Returns:
-        Dictionary with extracted information based on CV content
+        extracted_cv_object: string type
     """
     
+    print("tool: extract_cv_information start")
+    print(f'input to extract_cv_information: {content}')
     # Initialize the LLM for extraction
-    extraction_llm = init_huggingface_llm()
-    extraction_prompt = PromptService.get("cv_extraction")
+    extraction_llm = llm
+    extraction_prompt = PromptService().get("resume_to_dict")
     extraction_prompt = extraction_prompt.render_messages(content=content)
-    # Prompt the LLM to analyze and extract information
-    # extraction_prompt =
-    
-    try:
-        # Call the LLM to extract information
-        print("  → Calling LLM for extraction...")
-        response = extraction_llm.invoke(extraction_prompt)
-        
-        # Extract JSON from response
-        response_text = response if isinstance(response, str) else str(response)
-        
-        # Try to find JSON in the response
-        start_idx = response_text.find('{')
-        end_idx = response_text.rfind('}')
-        
-        if start_idx != -1 and end_idx != -1:
-            json_str = response_text[start_idx:end_idx + 1]
-            extracted_data = json.loads(json_str)
-            print("  ✓ Successfully extracted structured data")
-        else:
-            # Fallback: return raw response wrapped in a dict
-            extracted_data = {
-                "raw_extraction": response_text,
-                "note": "Could not parse as JSON, returning raw response"
-            }
-            print("  ⚠ Could not parse JSON, returning raw response")
-        
-        return extracted_data
-        
-    except json.JSONDecodeError as e:
-        print(f"  ❌ JSON parsing failed: {e}")
-        return {
-            "error": "JSON parsing failed",
-            "raw_response": response_text[:500],
-            "message": "The LLM response could not be parsed as JSON"
-        }
-    except Exception as e:
-        print(f"  ❌ Error during extraction: {e}")
-        return {
-            "error": str(e),
-            "message": "An error occurred during extraction"
-        }
 
-# @tool
-def transform_job_description(content: str) -> dict:
+    print("tool: extract_cv_information invoking LLM")
+    add_token_usage("extract_prompt", str(extraction_prompt))
+    response = extraction_llm.invoke(extraction_prompt)
+    response_text = getattr(response, "content", response)
+    add_token_usage("extract_response", response_text)
+
+    print("tool: extract_cv_information response received")
+    print("tool: extract_cv_information raw response:", response_text)
+    return response_text
+
+
+@tool
+def extract_jd_keywords(job_description: str) -> str:
     """
-    Transform job description into a json object based on the given prompt.
+    Extract a compact, relevant summary from a job description.
 
-    Parameters:
-    - content (str): The job description.
+    Args:
+        job_description: string object
 
     Returns:
-    - dict: JSON of the job description.
+        extracted_jd_object: string type
     """
-    print('\n\n\n extract job description.')
+    print("tool: extract_jd_keywords start")
+    print(f'input to extract_jd_keywords: {job_description}')
     prompt_name: str = "job_description_to_dict"
-    # print('the content for job description transformation is: ', content)
     prompt = PromptService().get(prompt_name)
-    messages = prompt.render_messages(content=content)
-    llm_output = litellm_chat(messages=messages)
-    parsed = parse_jsonish(llm_output)
-    flag=False
-    if "llm_output" in parsed:
-        flag=True
-        parsed["content"] = content
-    if flag:
-        print(f'comparison done {parsed["llm_output"]}')
-        return parsed['llm_output']
-    else:
-        print(f'comparison done {parsed}')
-        return parsed
+    messages = prompt.render_messages(content=job_description)
+    add_token_usage("jd_keywords_prompt", str(messages))
+    jd_llm = llm
+    print("tool: extract_jd_keywords invoking LLM")
+    llm_output = jd_llm.invoke(messages)
+    response_text = getattr(llm_output, "content", llm_output)
+    # response_text = response_text if isinstance(response_text, str) else str(response_text)
+    add_token_usage("jd_keywords_response", response_text)
+    
+    print("tool: extract_jd_keywords raw response:", response_text)
+    print("tool: extract_jd_keywords complete")
+    return response_text
 
 
-# @tool
+@tool
 def compare_cv_data(
-    content: str,
-) -> dict:
+    extracted_cv_object: str,
+    extracted_jd_object: str,
+) -> str:
     """
-    Compares the extracted resume content with a job description using a prompt. Returns a json object with comparison results.
+    Compare CV content to a job description and return structured guidance for downstream CV improvement tools.
 
-    Parameters:
-    - content (str): The content contains both the parsed CV and the provided job description. Separate them with necessary separators, so that LLM is aware of the separation.
+    Args:
+    - extracted_cv_object: str
+    - extracted_jd_object: str
 
     Returns:
-    - dict: A json object of comparison results.
+    - comparison_object: string object
 
     """
     prompt_name: str = "compare_cv_to_job"
-    print('\n\n\n compare description vs cv.')
-
-    # print('the content for comparison is: ', content)
+    print("tool: compare_cv_data start")
 
     prompt = PromptService().get(prompt_name)
+    content = json.dumps(
+        {"resume": extracted_cv_object, "job_description": extracted_jd_object},
+        ensure_ascii=True,
+    )
     messages = prompt.render_messages(content=content)
-    llm_output = litellm_chat(messages=messages)
-    parsed = parse_jsonish(llm_output)
-    flag=False
-    if "llm_output" in parsed:
-        flag=True
-        parsed["content"] = content
-    if flag:
-        print(f'comparison done {parsed["llm_output"]}')
-        return parsed['llm_output']
-    else:
-        print(f'comparison done {parsed}')
-        return parsed
+    print("tool: compare_cv_data input:", content)
+    comparison_llm = llm
+    llm_output = comparison_llm.invoke(messages)
+    response_text = getattr(llm_output, "content", llm_output)
+    
+    add_token_usage("compare_response", response_text)
+
+    print("tool: compare_cv_data raw response:", response_text)
+    return response_text
 
 
-# @tool
+@tool
 def optimize_cv(
-    content: str,
-) -> dict:
+    extracted_cv_object: str,
+    comparison_object: str,
+) -> str:
     """
-    Optimize the given CV based on the provided gap analysis.
+    Optimize the CV based on the comparison data.
 
-    Parameters:
-    - content (str): Contains JSON of the original CV and the JSON of gap analysis.
+    Args:
+    - extracted_cv_object: str
+    - comparison_object: str
 
     Returns:
-    - dict: JSON output of the optimized CV.
+    - optimized_cv_object: str
     """
-    print('\n\n\n optimize cv.')
-    # print(f'the inputs is: {content}')
+    print("tool: optimize_cv start")
     prompt_name: str = "optimize_cv"
     prompt = PromptService().get(prompt_name)
-    messages = prompt.render_messages(content=content)
-    llm_output = litellm_chat(messages=messages)
-    parsed = parse_jsonish(llm_output)
-    return parsed
+    payload = json.dumps(
+        {"cv_data": extracted_cv_object, "comparison_data": comparison_object},
+        ensure_ascii=True,
+    )
+    messages = prompt.render_messages(content=payload)
+    print("tool: optimize_cv input:", payload)
+    add_token_usage("optimize_prompt", str(messages))
+    optimization_llm = llm
+    llm_output = optimization_llm.invoke(messages)
+    response_text = getattr(llm_output, "content", llm_output)
+    # response_text = response_text if isinstance(response_text, str) else str(response_text)
+    add_token_usage("optimize_response", response_text)
+    
+    print("tool: optimize_cv raw response:", response_text)
+    return response_text
 
 
 # @tool
-def write_new_cv(content: str) -> dict:
+def write_new_cv(content: str) -> str:
     """
     Generate the new CV from the optimized CV JSON.
 
     Parameters:
     - content (str): JSON output of the optimized CV.
     Returns:
-    - dict: JSON object of the optimized json.
+    - str: Raw LLM response content.
     """
     print('\n\n\n write new cv.')
     
@@ -181,15 +160,15 @@ def write_new_cv(content: str) -> dict:
     prompt = PromptService().get(prompt_name)
     messages = prompt.render_messages(content=content)
     llm_output = litellm_chat(messages=messages)
-    parsed = parse_jsonish(llm_output)
-    print(f'CV written {parsed}')
-    return parsed
+    response_text = llm_output if isinstance(llm_output, str) else str(llm_output)
+    print("tool: write_new_cv complete")
+    return response_text
 
 
 # @tool
 def write_cover_letter(
     content: str,
-) -> dict:
+) -> str:
     """
     Generates a cover letter.
 
@@ -197,7 +176,7 @@ def write_cover_letter(
     - content (str): The content contains the newly generated CV and the provided job description. 
 
     Returns:
-    - dict: Parsed JSON output from the LLM (or a wrapper with the raw output).
+    - str: Raw LLM response content.
     """
     print('write cover letter.')
     # print(f'the content for cover letter transformation is: {content}')
@@ -205,10 +184,12 @@ def write_cover_letter(
     prompt = PromptService().get(prompt_name)
     messages = prompt.render_messages(content=content)
     llm_output = litellm_chat(messages=messages)
-    parsed = parse_jsonish(llm_output)
+    response_text = llm_output if isinstance(llm_output, str) else str(llm_output)
+    print("tool: write_cover_letter complete")
+    return response_text
 
-    print(f'cover letter done {parsed}')
-    return parsed
+
+
 
 
 if __name__ == "__main__":

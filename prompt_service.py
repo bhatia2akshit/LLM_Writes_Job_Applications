@@ -64,8 +64,10 @@ class PromptService:
             raise KeyError(f"Prompt '{name}' not found. Available: {available}")
 
         entry = prompts[name]
+        if isinstance(entry, str):
+            return Prompt(system="", user=entry)
         if not isinstance(entry, dict):
-            raise ValueError(f"Prompt '{name}' must be a mapping with keys 'system' and 'user'.")
+            raise ValueError(f"Prompt '{name}' must be a string or a mapping with keys 'system' and 'user'.")
         system = entry.get("system", "")
         user = entry.get("user", "")
         if not isinstance(system, str) or not isinstance(user, str):

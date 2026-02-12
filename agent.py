@@ -1,8 +1,9 @@
 import os
 from typing import Dict
 from langchain.agents import create_agent
-from helper import init_huggingface_llm
-from tools import compare_cv_data, extract_pdf_pages, optimize_cv, transform_job_description, write_cover_letter, write_new_cv
+from helper import add_token_usage
+from llm_service import LLMService
+from tools import compare_cv_data, extract_cv_information, extract_jd_keywords, optimize_cv, write_cover_letter, write_new_cv
 
 from huggingface_hub import login
 from dotenv import load_dotenv
@@ -15,44 +16,70 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, message=r"Pydantic serializer warnings:")
 
 
+available_tools = [extract_cv_information, extract_jd_keywords, compare_cv_data, optimize_cv]
 
-
-available_tools = [extract_pdf_pages]
-
-def call_agent(content: str):
+def call_agent(cv_text: str, job_description: str):
     """
     Create and return a LangChain agent for CV extraction.
     
-    The agent uses HuggingFace LLM and has access to the CV extraction tool.
+    The agent uses HuggingFace LLM and has access to the CV extraction, comparison, and optimization tools.
     """
     
+    print("agent: init llm")
     # Initialize the main LLM for the agent
-    main_llm = init_huggingface_llm()
-    
+    main_llm = LLMService('huggingface').get_llm()
+
+    print("agent: create agent")
     # Create the agent with the extraction tool
     agent = create_agent(
         model=main_llm,
         tools=available_tools,
-        system_prompt="""You are a helpful CV/resume parsing assistant. 
-        
-          When given CV text, you should:
-          1. Use the extract_cv_information tool to analyze and extract structured data
-          2. Return the extracted dictionary to the user
-          3. Be helpful and explain what information was found
+        system_prompt="""You are a helpful CV/resume creating assistant.
 
-          Always use the tool to extract information rather than trying to parse it yourself."""
+          For the given text of CV and Job Description, you will create a new CV that is optimized for the job description.
+          Follow the workflow below and do not skip any steps.
+
+          Mandatory workflow (do not skip steps):
+          1. Call the tool extract_cv_information tool on the CV text.
+          2. Call the tool extract_jd_keywords tool on the job description text.
+          3. Call the tool compare_cv_data tool using outputs from steps 1 and 2.
+          4. Call the tool optimize_cv tool using outputs from step 1 and step 3.
+
+          Requirements:
+          - Always call ALL four tools in order before producing the final response.
+          - Do not stop after a single tool call.
+          - Use tool outputs as inputs to the next tool.
+          - Do not manually parse, compare, or optimize outside tools.
+          - Final answer must be the output of Optimize CV tool."""
       )
+    print("agent: build prompt")
+    prompt_text = (
+        "Please follow the system defined rules for the following inputs.\n\n"
+        f"CV:\n{cv_text}\n\n"
+        f"Job Description:\n{job_description}"
+    )
+    add_token_usage("agent_prompt", prompt_text)
+    print("agent: invoking")
     response = agent.invoke({
     "messages": [
         {
             "role": "user", 
-            "content": f"Please extract structured information from this CV:\n\n{content}"
+            "content": prompt_text
         }
       ]
     })
+    print(response)
+    final_message = next(
+    (m for m in reversed(response["messages"]) if getattr(m, "role", None) == "assistant" and getattr(m, "content", None)),
+    None
+)
+    response_text = final_message.content if final_message else ""
+
     
-    print("✓ Agent created successfully")
-    return response['messages'][1].content
+    # print("agent: complete\n ", response)
+    # response_text = response['messages'][1].content
+    add_token_usage("agent_response", response_text)
+    return response_text
 
 
 
