@@ -1,16 +1,33 @@
 import os
 from typing import Dict
-from langchain.agents import create_agent
+try:
+    from langchain.agents import create_agent
+except Exception:  # pragma: no cover - fallback for older/newer LangChain APIs
+    from langchain.agents import initialize_agent
+
+    def create_agent(*, model, tools, system_prompt):
+        return initialize_agent(
+            tools=tools,
+            llm=model,
+            agent="chat-zero-shot-react-description",
+            verbose=False,
+            agent_kwargs={"system_message": system_prompt},
+        )
 from helper import add_token_usage
 from llm_service import LLMService
 from tools import compare_cv_data, extract_cv_information, extract_jd_keywords, optimize_cv, write_cover_letter, write_new_cv
 
+from pathlib import Path
 from huggingface_hub import login
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env.local")
 
-login(token=os.getenv("HUGGINGFACEHUB_API_TOKEN"))
+_HF_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+if _HF_TOKEN:
+    login(token=_HF_TOKEN)
+else:
+    print("agent: HUGGINGFACEHUB_API_TOKEN not set; skipping login")
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, message=r"Pydantic serializer warnings:")
@@ -79,7 +96,7 @@ def call_agent(cv_text: str, job_description: str):
     # print("agent: complete\n ", response)
     # response_text = response['messages'][1].content
     add_token_usage("agent_response", response_text)
-    return response_text
+    return response
 
 
 

@@ -1,10 +1,19 @@
 from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from agent import call_agent
 from helper import extract_pdf_text, reset_token_usage, print_token_usage
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # In-memory cache for the last uploaded CV text.
 _CACHED_CV_TEXT: Optional[str] = None
@@ -47,4 +56,4 @@ def index():
     return {"Hello": "World"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8080)

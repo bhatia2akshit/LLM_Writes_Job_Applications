@@ -29,3 +29,12 @@ def load_env_file(path: str | os.PathLike[str] = ".env.local", *, override: bool
             continue
         os.environ[key] = value
 
+
+def load_env_local(*, override: bool = False) -> None:
+    """
+    Load .env.local from backend/ first, then repo root if present.
+    """
+    here = Path(__file__).resolve().parent
+    candidates = [here / ".env.local", here.parent / ".env.local"]
+    for candidate in candidates:
+        load_env_file(candidate, override=override)

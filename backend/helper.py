@@ -7,15 +7,20 @@ from langchain_mistralai import ChatMistralAI
 from langchain_openai import ChatOpenAI
 from fastapi import File
 from pypdf import PdfReader
+from pathlib import Path
 from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from transformers import AutoTokenizer
 
-load_dotenv('.env.local')
+load_dotenv(Path(__file__).resolve().parent.parent / ".env.local")
 
 from huggingface_hub import login
 
-login(token=os.getenv("HUGGINGFACEHUB_API_TOKEN"))
+_HF_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+if _HF_TOKEN:
+    login(token=_HF_TOKEN)
+else:
+    print("helper: HUGGINGFACEHUB_API_TOKEN not set; skipping login")
 
 def extract_pdf_text(fileObj: File) -> str:
     print("helper: extract_pdf_text start")

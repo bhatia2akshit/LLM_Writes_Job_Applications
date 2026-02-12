@@ -2,3 +2,4 @@
 *.json
 .lhignore
 __pycache__
+frontend/node_modules

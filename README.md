@@ -1,22 +1,38 @@
-# Cheap Flight Finding Agent
+# LLM Writes Job Applications
 
-## Fixing `error: externally-managed-environment` (PEP 668)
+## Prereqs
 
-If you’re on macOS with Homebrew Python, `pip install` into the system Python is blocked. Use a virtual environment:
+- Docker + Docker Compose
+- `.env.local` in repo root with required API keys (e.g. `HUGGINGFACEHUB_API_TOKEN`)
+
+## Run With Docker
 
 ```bash
+docker compose up --build
+```
+
+Services:
+
+- Backend: `http://localhost:8080`
+- Frontend: `http://localhost:3000`
+
+## Local Dev (Optional)
+
+Backend:
+
+```bash
+cd backend
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -U pip
 python -m pip install -r requirements.txt
+uvicorn app:app --host 0.0.0.0 --port 8080
 ```
 
-Run:
+Frontend:
 
 ```bash
-python3 pdfreader.py
+cd frontend
+npm install
+npm run dev
 ```
-
-Notes:
-- Prompts are loaded from `prompt.yaml` (override path with `PROMPT_YAML_PATH`).
-- `pdfreader.py` loads `.env.local` automatically (example: `MISTRAL_API_KEY=...`) and you can set `LITELLM_MODEL` (example: `mistral/mistral-small-latest`).

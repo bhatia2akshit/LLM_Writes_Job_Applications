@@ -7,10 +7,19 @@ from langchain_core.tools import tool
 from helper import add_token_usage
 from llm_service import LLMService
 from prompt_service import PromptService
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv('.env.local')
+load_dotenv(Path(__file__).resolve().parent.parent / ".env.local")
 llm = LLMService("huggingface").get_llm()
+
+def litellm_chat(messages):
+    """
+    Lightweight helper for litellm-backed chat calls.
+    """
+    chat_llm = LLMService("litellm").get_llm()
+    response = chat_llm.invoke(messages)
+    return getattr(response, "content", response)
 
 
 @tool
@@ -26,7 +35,7 @@ def extract_cv_information(content: str) -> str:
     """
     
     print("tool: extract_cv_information start")
-    print(f'input to extract_cv_information: {content}')
+    # print(f'input to extract_cv_information: {content}')
     # Initialize the LLM for extraction
     extraction_llm = llm
     extraction_prompt = PromptService().get("resume_to_dict")
@@ -39,7 +48,7 @@ def extract_cv_information(content: str) -> str:
     add_token_usage("extract_response", response_text)
 
     print("tool: extract_cv_information response received")
-    print("tool: extract_cv_information raw response:", response_text)
+    # print("tool: extract_cv_information raw response:", response_text)
     return response_text
 
 
@@ -55,7 +64,7 @@ def extract_jd_keywords(job_description: str) -> str:
         extracted_jd_object: string type
     """
     print("tool: extract_jd_keywords start")
-    print(f'input to extract_jd_keywords: {job_description}')
+    # print(f'input to extract_jd_keywords: {job_description}')
     prompt_name: str = "job_description_to_dict"
     prompt = PromptService().get(prompt_name)
     messages = prompt.render_messages(content=job_description)
@@ -67,7 +76,7 @@ def extract_jd_keywords(job_description: str) -> str:
     # response_text = response_text if isinstance(response_text, str) else str(response_text)
     add_token_usage("jd_keywords_response", response_text)
     
-    print("tool: extract_jd_keywords raw response:", response_text)
+    # print("tool: extract_jd_keywords raw response:", response_text)
     print("tool: extract_jd_keywords complete")
     return response_text
 
@@ -97,14 +106,14 @@ def compare_cv_data(
         ensure_ascii=True,
     )
     messages = prompt.render_messages(content=content)
-    print("tool: compare_cv_data input:", content)
+    # print("tool: compare_cv_data input:", content)
     comparison_llm = llm
     llm_output = comparison_llm.invoke(messages)
     response_text = getattr(llm_output, "content", llm_output)
     
     add_token_usage("compare_response", response_text)
 
-    print("tool: compare_cv_data raw response:", response_text)
+    # print("tool: compare_cv_data raw response:", response_text)
     return response_text
 
 
@@ -131,7 +140,7 @@ def optimize_cv(
         ensure_ascii=True,
     )
     messages = prompt.render_messages(content=payload)
-    print("tool: optimize_cv input:", payload)
+    # print("tool: optimize_cv input:", payload)
     add_token_usage("optimize_prompt", str(messages))
     optimization_llm = llm
     llm_output = optimization_llm.invoke(messages)
@@ -139,7 +148,7 @@ def optimize_cv(
     # response_text = response_text if isinstance(response_text, str) else str(response_text)
     add_token_usage("optimize_response", response_text)
     
-    print("tool: optimize_cv raw response:", response_text)
+    # print("tool: optimize_cv raw response:", response_text)
     return response_text
 
 
